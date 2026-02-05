@@ -409,7 +409,7 @@ export function VideoConsultation() {
             <div className="w-12 h-12 bg-purple-100 dark:bg-purple-950 rounded-full flex items-center justify-center mx-auto mb-4">
               <DollarSign className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
-            <h4 className="font-medium mb-2">{language === 'ar' ? 'أ��عار مناسبة' : 'Affordable Prices'}</h4>
+            <h4 className="font-medium mb-2">{language === 'ar' ? 'أسعار مناسبة' : 'Affordable Prices'}</h4>
             <p className="text-sm text-muted-foreground">{language === 'ar' ? 'استشارات طبية بأسعار مناسبة للجميع' : 'Medical consultations at affordable prices for everyone'}</p>
           </CardContent>
         </Card>
