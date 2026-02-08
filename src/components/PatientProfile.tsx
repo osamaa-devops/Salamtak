@@ -42,7 +42,7 @@ export function PatientProfile({ onNavigate, onBack }: PatientProfileProps) {
     height: "175",
     weight: "75",
     emergencyContact: "01987654321",
-    emergencyContactName: language === 'ar' ? 'أحمد رضا' : 'Ahmed Reda'
+    emergencyContactName: language === 'ar' ? ' رضا رافت' : 'Reda Raafat'
   });
 
   const [medicalHistory] = useState([

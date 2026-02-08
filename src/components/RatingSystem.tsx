@@ -83,7 +83,7 @@ export function RatingSystem() {
       id: 2,
       patientName: language === 'ar' ? 'فاطمة علي' : 'Fatima Ali',
       rating: 4,
-      comment: language === 'ar' ? 'عيادة نظيفة وموظفين محترمين. وقت الانتظار كان قليل. الطبيب كان جيد و��كن أتمنى لو أعطى وقت أكثر للشرح.' : 'Clean clinic with respectful staff. Waiting time was short. The doctor was good but I wish he had given more time for explanation.',
+      comment: language === 'ar' ? 'عيادة نظيفة وموظفين محترمين. وقت الانتظار كان قليل. الطبيب كان جيد أتمنى لو أعطى وقت أكثر للشرح.' : 'Clean clinic with respectful staff. Waiting time was short. The doctor was good but I wish he had given more time for explanation.',
       date: "2024-01-08",
       verified: true,
       helpful: 8,

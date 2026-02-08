@@ -407,7 +407,7 @@ const translations: Record<Language, Record<string, string>> = {
     // Video Consultation
     'video.title': 'استشارة مرئية',
     'video.start': 'بدء الاستشارة',
-    'video.join': '��نضم للمكالمة',
+    'video.join': 'نضم للمكالمة',
     'video.end': 'إنهاء الاستشارة',
     'video.mute': 'كتم الصوت',
     'video.unmute': 'تشغيل الصوت',

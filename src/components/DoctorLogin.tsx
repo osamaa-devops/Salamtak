@@ -53,7 +53,7 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                   <Label htmlFor="doctor-name">{t('register.name')}</Label>
                   <div className="relative">
                     <User className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Input id="doctor-name" placeholder={language === 'ar' ? '��. أحمد محمد' : 'Dr. Ahmed Mohamed'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Input id="doctor-name" placeholder={language === 'ar' ? 'مثال :احمد محمد' : 'EX:Dr. Ahmed Mohamed'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
                   </div>
                 </div>
                 
