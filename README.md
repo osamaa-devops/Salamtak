@@ -1,76 +1,139 @@
-# نظام المتابعة الطبية (Salamtak)
+# Salamtak Full-Stack Medical Follow-up System
 
-نظام متابعة طبية متكامل يربط المرضى بالأطباء عن طريق الاستشارات الطبية عن بعد.
+Salamtak is a React + Vite frontend connected to a Node.js + Express + MongoDB backend. The original Figma Make UI is preserved while the app now uses real REST APIs, JWT authentication, MongoDB models, seed data, Docker, and deployment config.
 
-## 🚀 Running the code locally
+## Stack
 
-### Install dependencies
+- Frontend: React 18, Vite, Radix UI
+- Backend: Node.js, Express
+- Database: MongoDB with Mongoose
+- Auth: JWT access tokens, bcrypt password hashing
+- Production middleware: Helmet, Compression, CORS, Rate Limiting, Morgan
+
+## Install
+
 ```bash
 npm install
+cp .env.example .env
 ```
 
-### Start development server
+## MongoDB Atlas
+
+1. Create a free cluster at MongoDB Atlas.
+2. Create a database user.
+3. Allow your IP address in Network Access, or use `0.0.0.0/0` for managed hosting.
+4. Copy the connection string into `MONGO_URI`.
+
+Example:
+
+```env
+MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/salamtak?retryWrites=true&w=majority
+JWT_SECRET=replace-with-a-long-random-secret
+JWT_EXPIRES_IN=7d
+PORT=5000
+CLIENT_URL=http://localhost:3000
+VITE_API_URL=http://localhost:5000/api
+```
+
+## Seed Data
+
 ```bash
-npm run dev
+npm run seed
 ```
 
-### Build for production
+Test accounts:
+
+- Patient: `01234567890` / `Password123!`
+- Doctor: `doctor@salamtak.com` / `Password123!`
+
+## Run Locally
+
+Frontend only:
+
+```bash
+npm run frontend:dev
+```
+
+Backend only:
+
+```bash
+npm run backend:dev
+```
+
+Full app:
+
+```bash
+npm run dev:full
+```
+
+Frontend runs on Vite, usually `http://localhost:3000` or the next available port. Backend runs on `http://localhost:5000`.
+
+## API Overview
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/doctors`
+- `GET /api/doctors/video`
+- `GET /api/patients`
+- `GET /api/appointments`
+- `POST /api/appointments`
+- `GET /api/prescriptions`
+- `POST /api/prescriptions`
+- `GET /api/medication-schedules`
+- `POST /api/medication-schedules`
+- `PATCH /api/medication-schedules/:id`
+- `DELETE /api/medication-schedules/:id`
+- `GET /api/reminders`
+- `PATCH /api/reminders/:id/read`
+- `GET /api/pharmacies`
+- `POST /api/orders`
+- `GET /api/reviews`
+- `POST /api/reviews`
+- `POST /api/consultations`
+- `POST /api/consultations/:id/messages`
+- `PATCH /api/consultations/:id/end`
+- `GET /health`
+
+## Build and Checks
+
 ```bash
 npm run build
+npm run lint
 ```
 
-## 📦 Deploy to Vercel
+`npm run lint` is currently mapped to the production build because this export did not include an ESLint setup.
 
-### الطريقة الأولى: عن طريق Vercel Dashboard (موصى بها)
-
-1. **ارفع الكود على GitHub**
-   ```bash
-   git add .
-   git commit -m "Prepare for deployment"
-   git push origin main
-   ```
-
-2. **اذهب إلى [vercel.com](https://vercel.com)** وسجل دخول باستخدام GitHub
-
-3. **اضغط "Add New Project"** واختر المشروع الخاص بك
-
-4. **Vercel سيكتشف الإعدادات تلقائياً** من ملف `vercel.json`
-
-5. **أضف Environment Variables** في إعدادات المشروع:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - أي متغيرات بيئة أخرى
-
-6. **اضغط Deploy** ✅
-
-### الطريقة الثانية: عن طريق Vercel CLI
+## Docker
 
 ```bash
-# تثبيت Vercel CLI
-npm install -g vercel
-
-# تسجيل الدخول
-vercel login
-
-# النشر
-vercel
+docker compose up --build
 ```
 
-## 📋 Environment Variables
+The compose file starts MongoDB and the app service. For local frontend development with Vite, use `npm run dev:full`.
 
-قم بنسخ `.env.example` إلى `.env.local` وأضف القيم الخاصة بك:
+## Deployment
+
+### Render
+
+Use `render.yaml`, set environment variables in the Render dashboard, and connect the repo.
+
+### Railway
+
+Create a Node service, set the same environment variables, and use:
 
 ```bash
-cp .env.example .env.local
+npm ci
+npm run build
+npm start
 ```
 
-## 🛠️ Tech Stack
+### VPS / Docker
 
-- **Framework**: React + Vite
-- **UI**: Radix UI + Tailwind CSS
-- **Backend**: Supabase
-- **Deployment**: Vercel
+Copy the repo to the server, create `.env`, then:
 
-## 📝 Original Design
+```bash
+docker compose up --build -d
+```
 
-The original project design is available at [Figma](https://www.figma.com/design/KuNlVKimJHd5NmksnTxRbG/%D9%86%D8%B8%D8%A7%D9%85-%D8%A7%D9%84%D9%85%D8%AA%D8%A7%D8%A8%D8%B9%D8%A9-%D8%A7%D9%84%D8%B7%D8%A8%D9%8A%D8%A9--Copy-).
+For production, set `CLIENT_URL` to the deployed frontend domain and `VITE_API_URL` to the deployed backend `/api` URL.

@@ -23,9 +23,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface Medication {
-  id: number;
+  id: string;
   name: string;
   dosage: string;
   price: number;
@@ -34,7 +36,7 @@ interface Medication {
 }
 
 interface Pharmacy {
-  id: number;
+  id: string;
   name: string;
   rating: number;
   deliveryTime: string;
@@ -48,7 +50,7 @@ interface Pharmacy {
 interface CartItem {
   medication: Medication;
   quantity: number;
-  pharmacyId: number;
+  pharmacyId: string;
 }
 
 export function PharmacyDelivery() {
@@ -59,65 +61,28 @@ export function PharmacyDelivery() {
   const [showCart, setShowCart] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("card");
+  const { data: pharmacyData, isLoading, error } = useAsyncData(() => api.pharmacies(), []);
 
-  const pharmacies: Pharmacy[] = [
-    {
-      id: 1,
-      name: language === 'ar' ? 'صيدلية الهدي' : 'Al-Huda Pharmacy',
-      rating: 4.8,
-      deliveryTime: language === 'ar' ? '30-45 دقيقة' : '30-45 minutes',
-      deliveryFee: 15,
-      minOrder: 50,
-      address: language === 'ar' ? 'مدينة العاشر من رمضان، الشرقية' : '10th of Ramadan City, Sharqia',
-      phone: "01234567890",
-      medications: [
-        { id: 1, name: language === 'ar' ? 'أسبرين 100 مجم' : 'Aspirin 100mg', dosage: language === 'ar' ? '30 قرص' : '30 tablets', price: 25, inStock: true, prescriptionRequired: false },
-        { id: 2, name: language === 'ar' ? 'باراسيتامول 500 مجم' : 'Paracetamol 500mg', dosage: language === 'ar' ? '20 قرص' : '20 tablets', price: 18, inStock: true, prescriptionRequired: false },
-        { id: 3, name: language === 'ar' ? 'أموكسيسيلين 500 مجم' : 'Amoxicillin 500mg', dosage: language === 'ar' ? '14 كبسولة' : '14 capsules', price: 45, inStock: true, prescriptionRequired: true },
-        { id: 7, name: language === 'ar' ? 'فيتامين د 1000 وحدة' : 'Vitamin D 1000 IU', dosage: language === 'ar' ? '30 كبسولة' : '30 capsules', price: 35, inStock: true, prescriptionRequired: false },
-        { id: 8, name: language === 'ar' ? 'حبوب الحديد 65 مجم' : 'Iron 65mg', dosage: language === 'ar' ? '30 قرص' : '30 tablets', price: 28, inStock: true, prescriptionRequired: false },
-        { id: 9, name: language === 'ar' ? 'مرهم مضاد حيوي' : 'Antibiotic Ointment', dosage: language === 'ar' ? '15 جم' : '15g', price: 22, inStock: true, prescriptionRequired: false },
-      ]
-    },
-    {
-      id: 2,
-      name: language === 'ar' ? 'صيدلية الدواء' : 'Al-Dawwa Pharmacy',
-      rating: 4.6,
-      deliveryTime: language === 'ar' ? '45-60 دقيقة' : '45-60 minutes',
-      deliveryFee: 10,
-      minOrder: 40,
-      address: language === 'ar' ? 'مدينة نصر، القاهرة' : 'Nasr City, Cairo',
-      phone: "01234567891",
-      medications: [
-        { id: 4, name: language === 'ar' ? 'إيبوبروفين 400 مجم' : 'Ibuprofen 400mg', dosage: language === 'ar' ? '20 قرص' : '20 tablets', price: 22, inStock: true, prescriptionRequired: false },
-        { id: 5, name: language === 'ar' ? 'أوميبرازول 20 مجم' : 'Omeprazole 20mg', dosage: language === 'ar' ? '14 كبسولة' : '14 capsules', price: 35, inStock: false, prescriptionRequired: true },
-        { id: 6, name: language === 'ar' ? 'لوراتادين 10 مجم' : 'Loratadine 10mg', dosage: language === 'ar' ? '10 أقراص' : '10 tablets', price: 28, inStock: true, prescriptionRequired: false },
-        { id: 10, name: language === 'ar' ? 'شراب الكحة للأطفال' : 'Children\'s Cough Syrup', dosage: language === 'ar' ? '120 مل' : '120ml', price: 32, inStock: true, prescriptionRequired: false },
-        { id: 11, name: language === 'ar' ? 'قطرة العين المضادة للالتهاب' : 'Anti-Inflammatory Eye Drops', dosage: language === 'ar' ? '10 مل' : '10ml', price: 42, inStock: true, prescriptionRequired: true },
-        { id: 12, name: language === 'ar' ? 'كريم مرطب للوجه' : 'Moisturizing Face Cream', dosage: language === 'ar' ? '50 جم' : '50g', price: 65, inStock: true, prescriptionRequired: false },
-      ]
-    },
-    {
-      id: 3,
-      name: language === 'ar' ? 'صيدلية العزبي' : 'Al-Azabi Pharmacy',
-      rating: 4.7,
-      deliveryTime: language === 'ar' ? '25-40 دقيقة' : '25-40 minutes',
-      deliveryFee: 12,
-      minOrder: 45,
-      address: language === 'ar' ? 'الإسكندرية، الإسكندرية' : 'Alexandria, Alexandria',
-      phone: "01234567892",
-      medications: [
-        { id: 13, name: language === 'ar' ? 'أقراص الكالسيوم 600 مجم' : 'Calcium 600mg Tablets', dosage: language === 'ar' ? '30 قرص' : '30 tablets', price: 38, inStock: true, prescriptionRequired: false },
-        { id: 14, name: language === 'ar' ? 'مضاد الحموضة' : 'Antacid', dosage: language === 'ar' ? '20 قرص' : '20 tablets', price: 24, inStock: true, prescriptionRequired: false },
-        { id: 15, name: language === 'ar' ? 'مسكن الألم القوي' : 'Strong Painkiller', dosage: language === 'ar' ? '10 أقراص' : '10 tablets', price: 55, inStock: true, prescriptionRequired: true },
-        { id: 16, name: language === 'ar' ? 'فيتامين سي 1000 مجم' : 'Vitamin C 1000mg', dosage: language === 'ar' ? '30 قرص فوار' : '30 effervescent tablets', price: 48, inStock: true, prescriptionRequired: false },
-        { id: 17, name: language === 'ar' ? 'مضاد حيوي واسع المجال' : 'Broad-Spectrum Antibiotic', dosage: language === 'ar' ? '7 كبسولات' : '7 capsules', price: 68, inStock: true, prescriptionRequired: true },
-        { id: 18, name: language === 'ar' ? 'معقم اليدين 75%' : '75% Hand Sanitizer', dosage: language === 'ar' ? '250 مل' : '250ml', price: 15, inStock: true, prescriptionRequired: false },
-      ]
-    }
-  ];
+  const pharmacies: Pharmacy[] = (pharmacyData || []).map((pharmacy) => ({
+    id: pharmacy._id,
+    name: pharmacy.name,
+    rating: pharmacy.rating,
+    deliveryTime: pharmacy.deliveryTime,
+    deliveryFee: pharmacy.deliveryFee,
+    minOrder: pharmacy.minOrder,
+    address: pharmacy.address,
+    phone: pharmacy.phone,
+    medications: (pharmacy.medications || []).map((medication: any) => ({
+      id: medication._id,
+      name: medication.name,
+      dosage: medication.dosage,
+      price: medication.price,
+      inStock: medication.inStock,
+      prescriptionRequired: medication.prescriptionRequired,
+    })),
+  }));
 
-  const addToCart = (medication: Medication, pharmacyId: number) => {
+  const addToCart = (medication: Medication, pharmacyId: string) => {
     const existingItem = cart.find(item => 
       item.medication.id === medication.id && item.pharmacyId === pharmacyId
     );
@@ -135,13 +100,13 @@ export function PharmacyDelivery() {
     toast.success(`تم إضافة ${medication.name} إلى السلة`);
   };
 
-  const removeFromCart = (medicationId: number, pharmacyId: number) => {
+  const removeFromCart = (medicationId: string, pharmacyId: string) => {
     setCart(prev => prev.filter(item => 
       !(item.medication.id === medicationId && item.pharmacyId === pharmacyId)
     ));
   };
 
-  const updateQuantity = (medicationId: number, pharmacyId: number, newQuantity: number) => {
+  const updateQuantity = (medicationId: string, pharmacyId: string, newQuantity: number) => {
     if (newQuantity === 0) {
       removeFromCart(medicationId, pharmacyId);
       return;
@@ -173,7 +138,7 @@ export function PharmacyDelivery() {
     med.name.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error("السلة فارغة");
       return;
@@ -184,10 +149,19 @@ export function PharmacyDelivery() {
       return;
     }
 
-    const total = getFinalTotal();
-    toast.success(`تم تأكيد الطلب بقيمة ${total} جنيه مصري. سيتم التوصيل خلال ${selectedPharmacy?.deliveryTime}`);
-    setCart([]);
-    setShowCart(false);
+    try {
+      const order = await api.createOrder({
+        pharmacy: cart[0].pharmacyId,
+        items: cart.map((item) => ({ medication: item.medication.id, quantity: item.quantity })),
+        deliveryAddress,
+        paymentMethod,
+      });
+      toast.success(`تم تأكيد الطلب بقيمة ${order.total} جنيه مصري. سيتم التوصيل خلال ${selectedPharmacy?.deliveryTime}`);
+      setCart([]);
+      setShowCart(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر تأكيد الطلب");
+    }
   };
 
   const cartItemsCount = cart.reduce((total, item) => total + item.quantity, 0);
@@ -318,6 +292,9 @@ export function PharmacyDelivery() {
               <CardTitle>{language === 'ar' ? 'الصيدليات المتاحة' : 'Available Pharmacies'}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {isLoading && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'جاري تحميل الصيدليات...' : 'Loading pharmacies...'}</p>}
+              {error && <p className="text-center text-red-600 py-6">{error}</p>}
+              {!isLoading && !error && pharmacies.length === 0 && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'لا توجد صيدليات متاحة' : 'No pharmacies available'}</p>}
               {pharmacies.map((pharmacy) => (
                 <div
                   key={pharmacy.id}

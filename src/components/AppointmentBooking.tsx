@@ -19,9 +19,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface Doctor {
-  id: number;
+  id: string;
   name: string;
   specialty: string;
   rating: number;
@@ -46,81 +48,20 @@ export function AppointmentBooking({ onNavigate, onBack }: AppointmentBookingPro
   const [selectedTime, setSelectedTime] = useState("");
   const [appointmentType, setAppointmentType] = useState("");
   const [symptoms, setSymptoms] = useState("");
+  const { data: doctorData, isLoading, error } = useAsyncData(() => api.doctors(), []);
 
-  const doctors: Doctor[] = [
-    {
-      id: 1,
-      name: t('default.doctor.name'),
-      specialty: t('specialty.cardiology'),
-      rating: 4.8,
-      experience: 15,
-      clinic: language === 'ar' ? 'مستشفى النور' : 'Al-Nour Hospital',
-      address: language === 'ar' ? 'شارع النيل، المعادي، القاهرة' : 'Nile Street, Maadi, Cairo',
-      fee: 200,
-      availableSlots: ["09:00", "10:00", "11:00", "14:00", "15:00"],
-      type: 'clinic'
-    },
-    {
-      id: 2,
-      name: t('default.doctor2.name'),
-      specialty: t('specialty.dermatology'),
-      rating: 4.9,
-      experience: 12,
-      clinic: language === 'ar' ? 'عيادة الجمال' : 'Beauty Clinic',
-      address: language === 'ar' ? 'شارع التحرير، وسط البلد، القاهرة' : 'Tahrir Street, Downtown, Cairo',
-      fee: 150,
-      availableSlots: ["10:00", "11:00", "16:00", "17:00"],
-      type: 'clinic'
-    },
-    {
-      id: 3,
-      name: t('default.doctor3.name'),
-      specialty: t('specialty.cardiology'),
-      rating: 4.7,
-      experience: 10,
-      clinic: language === 'ar' ? 'استشارة عن بعد' : 'Online Consultation',
-      address: language === 'ar' ? 'متاح أونلاين' : 'Available Online',
-      fee: 100,
-      availableSlots: ["08:00", "09:00", "20:00", "21:00"],
-      type: 'video'
-    },
-    {
-      id: 4,
-      name: t('default.doctor.name'),
-      specialty: t('specialty.orthopedics'),
-      rating: 4.6,
-      experience: 18,
-      clinic: language === 'ar' ? 'مستشفى القاهرة الجديدة' : 'New Cairo Hospital',
-      address: language === 'ar' ? 'شارع التسعين، القاهرة الجديدة' : '90th Street, New Cairo',
-      fee: 250,
-      availableSlots: ["09:30", "11:30", "14:30", "16:30"],
-      type: 'clinic'
-    },
-    {
-      id: 5,
-      name: t('default.doctor2.name'),
-      specialty: t('specialty.pediatrics'),
-      rating: 4.8,
-      experience: 14,
-      clinic: language === 'ar' ? 'عيادة الأطفال' : 'Pediatric Clinic',
-      address: language === 'ar' ? 'شارع الهرم، الجيزة' : 'Haram Street, Giza',
-      fee: 180,
-      availableSlots: ["10:30", "12:00", "15:30", "17:30"],
-      type: 'clinic'
-    },
-    {
-      id: 6,
-      name: t('default.doctor3.name'),
-      specialty: t('specialty.general'),
-      rating: 4.5,
-      experience: 8,
-      clinic: language === 'ar' ? 'استشارة عن بعد' : 'Online Consultation',
-      address: language === 'ar' ? 'متاح أونلاين' : 'Available Online',
-      fee: 80,
-      availableSlots: ["07:00", "08:30", "21:30", "22:00"],
-      type: 'video'
-    }
-  ];
+  const doctors: Doctor[] = (doctorData || []).map((doctor) => ({
+    id: doctor.user?._id,
+    name: doctor.user?.name || "",
+    specialty: doctor.specialty,
+    rating: doctor.rating || 0,
+    experience: doctor.experience || 0,
+    clinic: doctor.clinic || "",
+    address: doctor.address || "",
+    fee: doctor.fee || 0,
+    availableSlots: doctor.availableSlots || [],
+    type: doctor.consultationType === "video" ? "video" : "clinic",
+  }));
 
   const specialties = [
     { value: t('specialty.cardiology'), label: t('specialty.cardiology') },
@@ -135,16 +76,29 @@ export function AppointmentBooking({ onNavigate, onBack }: AppointmentBookingPro
     ? doctors.filter(doctor => doctor.specialty === selectedSpecialty)
     : doctors;
 
-  const handleBookAppointment = () => {
+  const handleBookAppointment = async () => {
     if (selectedDoctor && selectedDate && selectedTime) {
-      toast.success(
-        language === 'ar' 
-          ? `تم حجز موعد مع ${selectedDoctor.name} في ${selectedTime} بتاريخ ${selectedDate.toLocaleDateString('ar-EG')}`
-          : `Appointment booked with ${selectedDoctor.name} at ${selectedTime} on ${selectedDate.toLocaleDateString('en-US')}`
-      );
-      setTimeout(() => {
-        onBack?.();
-      }, 2000);
+      try {
+        await api.createAppointment({
+          doctor: selectedDoctor.id,
+          date: selectedDate.toISOString(),
+          time: selectedTime,
+          type: appointmentType || selectedDoctor.type,
+          symptoms,
+          clinic: selectedDoctor.clinic,
+          fee: selectedDoctor.fee,
+        });
+        toast.success(
+          language === 'ar' 
+            ? `تم حجز موعد مع ${selectedDoctor.name} في ${selectedTime} بتاريخ ${selectedDate.toLocaleDateString('ar-EG')}`
+            : `Appointment booked with ${selectedDoctor.name} at ${selectedTime} on ${selectedDate.toLocaleDateString('en-US')}`
+        );
+        setTimeout(() => {
+          onBack?.();
+        }, 2000);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : language === 'ar' ? 'تعذر حجز الموعد' : 'Unable to book appointment');
+      }
     }
   };
 
@@ -244,6 +198,9 @@ export function AppointmentBooking({ onNavigate, onBack }: AppointmentBookingPro
             </div>
 
             <div className="space-y-4">
+              {isLoading && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'جاري تحميل الأطباء...' : 'Loading doctors...'}</p>}
+              {error && <p className="text-center text-red-600 py-6">{error}</p>}
+              {!isLoading && !error && filteredDoctors.length === 0 && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'لا يوجد أطباء متاحون' : 'No doctors available'}</p>}
               {filteredDoctors.map((doctor) => (
                 <Card 
                   key={doctor.id} 

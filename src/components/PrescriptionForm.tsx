@@ -10,6 +10,8 @@ import { Separator } from "./ui/separator";
 import { Plus, Trash2, Printer, Save, User, Calendar, Clock, FileText } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface Medication {
   id: number;
@@ -27,6 +29,7 @@ interface PrescriptionFormProps {
 
 export function PrescriptionForm({ onNavigate, onBack }: PrescriptionFormProps) {
   const { t, dir, language } = useApp();
+  const { data: patients } = useAsyncData(() => api.patients(), []);
   const [medications, setMedications] = useState<Medication[]>([
     { id: 1, name: "", dosage: "", frequency: "", duration: "", instructions: "" }
   ]);
@@ -63,8 +66,24 @@ export function PrescriptionForm({ onNavigate, onBack }: PrescriptionFormProps) 
     ));
   };
 
-  const handleSave = () => {
-    toast.success(t('prescription.save') + ' ' + (language === 'ar' ? 'بنجاح' : 'successfully'));
+  const handleSave = async () => {
+    const patient = patients?.[0];
+    if (!patient) {
+      toast.error(language === 'ar' ? 'لا يوجد مريض متاح لحفظ الروشتة' : 'No patient available for this prescription');
+      return;
+    }
+
+    try {
+      await api.createPrescription({
+        patient: patient.user?._id,
+        diagnosis,
+        medications: medications.filter((med) => med.name && med.dosage).map(({ id, ...medication }) => medication),
+        notes,
+      });
+      toast.success(t('prescription.save') + ' ' + (language === 'ar' ? 'بنجاح' : 'successfully'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === 'ar' ? 'تعذر حفظ الروشتة' : 'Unable to save prescription');
+    }
   };
 
   const handlePrint = () => {

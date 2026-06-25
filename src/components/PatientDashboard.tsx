@@ -29,64 +29,70 @@ import {
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { useApp } from "../contexts/AppContext";
+import { ApiUser, api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
+import { toast } from "sonner@2.0.3";
 
 interface PatientDashboardProps {
   onLogout: () => void;
   onNavigate?: (state: string) => void;
+  currentUser?: ApiUser | null;
 }
 
-export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps) {
+export function PatientDashboard({ onLogout, onNavigate, currentUser }: PatientDashboardProps) {
   const { t, dir, language, theme, toggleLanguage, toggleTheme } = useApp();
   const [selectedDate] = useState(new Date());
+  const { data: appointmentData, setData: setAppointmentData, isLoading: appointmentsLoading, error: appointmentsError } = useAsyncData(() => api.appointments(), []);
+  const { data: scheduleData, setData: setScheduleData } = useAsyncData(() => api.medicationSchedules(), []);
+  const { data: profileData } = useAsyncData(() => api.patientProfile(), []);
 
-  // Mock data for appointments
-  const todayAppointments = [
-    {
-      id: 1,
-      doctorName: language === 'ar' ? "د. مختار نبيل" : "Dr. Mokhtar Nabil",
-      specialty: language === 'ar' ? "أمراض القلب" : "Cardiology",
-      time: "14:30",
-      type: language === 'ar' ? "كشف دوري" : "Regular Checkup",
-      status: "confirmed",
-      clinic: language === 'ar' ? "مستشفى النور" : "Al-Nour Hospital"
-    }
-  ];
+  const appointments = (appointmentData || []).map((appointment) => ({
+    id: appointment._id,
+    doctorName: appointment.doctor?.name || "",
+    specialty: appointment.doctorProfile?.specialty || "",
+    doctorPhone: appointment.doctor?.phone || "",
+    date: appointment.date,
+    time: appointment.time,
+    type: appointment.type,
+    status: appointment.status,
+    clinic: appointment.clinic || "",
+  }));
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayAppointments = appointments.filter((appointment) => String(appointment.date).slice(0, 10) === todayKey);
+  const upcomingAppointments = appointments.filter((appointment) => String(appointment.date).slice(0, 10) !== todayKey);
 
-  const upcomingAppointments = [
-    {
-      id: 2,
-      doctorName: language === 'ar' ? "د. مختار نبيل" : "Dr. Mokhtar Nabil",
-      specialty: language === 'ar' ? "العظام" : "Orthopedics", 
-      date: "2024-01-18",
-      time: "10:00",
-      type: language === 'ar' ? "متابعة" : "Follow-up",
-      clinic: language === 'ar' ? "عيادة العظام" : "Orthopedics Clinic"
-    },
-    {
-      id: 3,
-      doctorName: language === 'ar' ? "د. مؤمن اسماعيل" : "Dr. Moamen Ismail",
-      specialty: language === 'ar' ? "الجلدية" : "Dermatology",
-      date: "2024-01-20",
-      time: "15:30",
-      type: language === 'ar' ? "استشارة" : "Consultation",
-      clinic: language === 'ar' ? "عيادة الجلدية" : "Dermatology Clinic"
-    }
-  ];
+  const medicationReminders = (scheduleData || []).flatMap((schedule) =>
+    schedule.times.map((time: string) => ({
+      id: `${schedule._id}-${time}`,
+      scheduleId: schedule._id,
+      name: schedule.medicationName,
+      time,
+      taken: schedule.takenToday?.includes(time),
+    })),
+  );
 
-  const medicationReminders = [
-    {
-      id: 1,
-      name: "Aspirin 100mg",
-      time: "08:00",
-      taken: true
-    },
-    {
-      id: 2,
-      name: "Lisinopril 10mg",
-      time: "20:00",
-      taken: false
+  const cancelAppointment = async (id: string) => {
+    try {
+      const updated = await api.updateAppointment(id, { status: "cancelled" });
+      setAppointmentData((appointmentData || []).map((appointment) => appointment._id === id ? updated : appointment));
+      toast.success(language === "ar" ? "تم إلغاء الموعد" : "Appointment cancelled");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === "ar" ? "تعذر إلغاء الموعد" : "Unable to cancel appointment");
     }
-  ];
+  };
+
+  const markMedicationTaken = async (scheduleId: string, time: string) => {
+    const schedule = (scheduleData || []).find((item) => item._id === scheduleId);
+    if (!schedule) return;
+    const takenToday = Array.from(new Set([...(schedule.takenToday || []), time]));
+    try {
+      const updated = await api.updateMedicationSchedule(scheduleId, { takenToday });
+      setScheduleData((scheduleData || []).map((item) => item._id === scheduleId ? updated : item));
+      toast.success(language === "ar" ? "تم تسجيل تناول الدواء" : "Medication marked as taken");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === "ar" ? "تعذر تحديث الدواء" : "Unable to update medication");
+    }
+  };
 
   const quickActions = [
     {
@@ -131,12 +137,7 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
     }
   ];
 
-  const healthMetrics = [
-    { label: language === 'ar' ? "ضغط الدم" : "Blood Pressure", value: "120/80", status: "normal", color: "text-green-600" },
-    { label: language === 'ar' ? "مستوى السكر" : "Blood Sugar", value: "95 mg/dl", status: "normal", color: "text-green-600" },
-    { label: language === 'ar' ? "الوزن" : "Weight", value: language === 'ar' ? "75 كجم" : "75 kg", status: "stable", color: "text-blue-600" },
-    { label: language === 'ar' ? "درجة الحرارة" : "Temperature", value: "37°C", status: "normal", color: "text-green-600" }
-  ];
+  const healthMetrics = profileData?.healthMetrics || [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -171,12 +172,12 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
             <div className="flex items-center space-x-reverse space-x-2 sm:space-x-4">
               <div className="relative">
                 <Avatar className="w-10 h-10 sm:w-12 sm:h-12 ring-2 ring-emerald-200 ring-offset-2">
-                  <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-green-500 text-white font-semibold">{t('default.patient.name').split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
+                  <AvatarFallback className="bg-gradient-to-br from-emerald-500 to-green-500 text-white font-semibold">{(currentUser?.name || t('default.patient.name')).split(' ').map(n => n[0]).join('').slice(0, 2)}</AvatarFallback>
                 </Avatar>
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
               </div>
               <div>
-                <h1 className="font-bold not-italic text-sm sm:text-base">{t('default.patient.name')}</h1>
+                <h1 className="font-bold not-italic text-sm sm:text-base">{currentUser?.name || t('default.patient.name')}</h1>
                 <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
                   <Heart className="h-3 w-3 text-emerald-500" />
                   {language === 'ar' ? 'مريض منذ 2023' : 'Patient since 2023'}
@@ -208,7 +209,7 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
                 )}
               </Button>
               
-              <Button variant="ghost" size="sm" className="relative hover:bg-emerald-50 dark:hover:bg-emerald-900 h-8 w-8 sm:h-10 sm:w-10 p-0">
+              <Button variant="ghost" size="sm" onClick={() => onNavigate?.('medication-reminder')} className="relative hover:bg-emerald-50 dark:hover:bg-emerald-900 h-8 w-8 sm:h-10 sm:w-10 p-0">
                 <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
               </Button>
@@ -232,7 +233,7 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
         <div className="mb-6 sm:mb-8 animate-fadeIn">
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">
             <span className="bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
-              {t('dashboard.welcome')} {t('default.patient.name').split(' ')[0]} 👋
+              {t('dashboard.welcome')} {(currentUser?.name || t('default.patient.name')).split(' ')[0]}
             </span>
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground flex items-center gap-2">
@@ -251,9 +252,9 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
               </div>
             </CardHeader>
             <CardContent className="p-3 sm:p-4 lg:p-6 pt-0">
-              <div className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">{todayAppointments.length}</div>
+              <div className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">{appointmentsLoading ? "..." : todayAppointments.length}</div>
               <p className="text-xs text-muted-foreground mt-1">
-                {language === 'ar' ? 'موعد واحد مؤكد' : '1 confirmed appointment'}
+                {appointmentsError || (language === 'ar' ? 'مواعيدك المؤكدة اليوم' : 'confirmed appointments today')}
               </p>
             </CardContent>
           </Card>
@@ -376,7 +377,7 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
                           <Badge className={getStatusColor(appointment.status)}>
                             {getStatusText(appointment.status)}
                           </Badge>
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" onClick={() => window.location.href = `tel:${appointment.doctorPhone}`}>
                             <Phone className={`h-4 w-4 ${dir === 'rtl' ? 'ml-2' : 'mr-2'}`} />
                             {language === 'ar' ? 'اتصال' : 'Call'}
                           </Button>
@@ -431,8 +432,8 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
                       </div>
                       
                       <div className="flex items-center space-x-reverse space-x-2">
-                        <Button variant="outline" size="sm">{language === 'ar' ? 'تعديل' : 'Edit'}</Button>
-                        <Button variant="outline" size="sm">{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
+                        <Button variant="outline" size="sm" onClick={() => onNavigate?.('appointment-booking')}>{language === 'ar' ? 'تعديل' : 'Edit'}</Button>
+                        <Button variant="outline" size="sm" onClick={() => cancelAppointment(appointment.id)}>{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
                       </div>
                     </div>
                   </CardContent>
@@ -465,7 +466,7 @@ export function PatientDashboard({ onLogout, onNavigate }: PatientDashboardProps
                       </div>
                       
                       {!medication.taken && (
-                        <Button size="sm">
+                        <Button size="sm" onClick={() => markMedicationTaken(medication.scheduleId, medication.time)}>
                           {language === 'ar' ? 'تم التناول' : 'Mark as Taken'}
                         </Button>
                       )}

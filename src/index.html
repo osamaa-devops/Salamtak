@@ -105,10 +105,8 @@
             // Add device classes
             if (isMobile) {
                 document.body.classList.add('mobile-device');
-                console.log('Mobile device detected - optimizing experience');
             } else if (isTablet) {
                 document.body.classList.add('tablet-device');
-                console.log('Tablet device detected');
             }
             
             // Prevent zoom on double tap for mobile
@@ -128,12 +126,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 navigator.serviceWorker.register('/sw.js')
-                    .then(function(registration) {
-                        console.log('SW registered: ', registration);
-                    })
-                    .catch(function(registrationError) {
-                        console.log('SW registration failed: ', registrationError);
-                    });
+                    .catch(function() {});
             });
         }
 
@@ -157,8 +150,7 @@
         installButton.addEventListener('click', async () => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                console.log(`User response to the install prompt: ${outcome}`);
+                await deferredPrompt.userChoice;
                 deferredPrompt = null;
                 installBanner.style.display = 'none';
             }
@@ -168,8 +160,7 @@
             installBanner.style.display = 'none';
         });
 
-        window.addEventListener('appinstalled', (evt) => {
-            console.log('App was installed.');
+        window.addEventListener('appinstalled', () => {
             installBanner.style.display = 'none';
         });
 

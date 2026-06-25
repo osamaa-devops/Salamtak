@@ -6,15 +6,47 @@ import { Label } from "./ui/label";
 import { Checkbox } from "./ui/checkbox";
 import { ArrowRight, User, Mail, Lock, Phone, Calendar } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
+import { api, AuthResult } from "../services/api";
+import { toast } from "sonner@2.0.3";
 
 interface PatientLoginProps {
   onBack: () => void;
-  onLogin: () => void;
+  onLogin: (result: AuthResult) => void;
 }
 
 export function PatientLogin({ onBack, onLogin }: PatientLoginProps) {
   const { t, dir, language } = useApp();
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      const result = isRegistering
+        ? await api.register({
+            role: "patient",
+            name: String(formData.get("name") || ""),
+            phone: String(formData.get("phone") || ""),
+            email: String(formData.get("email") || ""),
+            birthDate: String(formData.get("birthDate") || ""),
+            password: String(formData.get("password") || ""),
+          })
+        : await api.login({
+            role: "patient",
+            phone: String(formData.get("phone") || ""),
+            password: String(formData.get("password") || ""),
+          });
+
+      onLogin(result);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === "ar" ? "فشل تسجيل الدخول" : "Login failed");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-gray-900 dark:to-emerald-950 flex items-center justify-center p-3 sm:p-4" dir={dir}>
@@ -39,13 +71,14 @@ export function PatientLogin({ onBack, onLogin }: PatientLoginProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 sm:px-6">
-          <form className="space-y-3 sm:space-y-4">
+          <form className="space-y-3 sm:space-y-4" onSubmit={handleSubmit}>
             {isRegistering ? (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="reg-name">{t('register.name')}</Label>
                   <Input
                     id="reg-name"
+                    name="name"
                     type="text"
                     placeholder={t('register.name.placeholder')}
                     required
@@ -57,6 +90,7 @@ export function PatientLogin({ onBack, onLogin }: PatientLoginProps) {
                   <Label htmlFor="reg-phone">{t('register.phone')}</Label>
                   <Input
                     id="reg-phone"
+                    name="phone"
                     type="tel"
                     placeholder="01234567890"
                     required
@@ -68,6 +102,7 @@ export function PatientLogin({ onBack, onLogin }: PatientLoginProps) {
                   <Label htmlFor="reg-email">{t('register.email')}</Label>
                   <Input
                     id="reg-email"
+                    name="email"
                     type="email"
                     placeholder="example@email.com"
                     required
@@ -79,6 +114,7 @@ export function PatientLogin({ onBack, onLogin }: PatientLoginProps) {
                   <Label htmlFor="reg-birthdate">{t('register.birthdate')}</Label>
                   <Input
                     id="reg-birthdate"
+                    name="birthDate"
                     type="date"
                     required
                     className="bg-white/50"
@@ -89,6 +125,7 @@ export function PatientLogin({ onBack, onLogin }: PatientLoginProps) {
                   <Label htmlFor="reg-password">{t('register.password')}</Label>
                   <Input
                     id="reg-password"
+                    name="password"
                     type="password"
                     placeholder="********"
                     required
@@ -134,11 +171,11 @@ export function PatientLogin({ onBack, onLogin }: PatientLoginProps) {
             )}
 
             <Button 
-              type="button"
-              onClick={onLogin}
+              type="submit"
               className="w-full bg-green-600 hover:bg-green-700" 
+              disabled={isSubmitting}
             >
-              {isRegistering ? t('register.submit') : t('login.submit')}
+              {isSubmitting ? (language === 'ar' ? 'جاري المعالجة...' : 'Processing...') : isRegistering ? t('register.submit') : t('login.submit')}
             </Button>
             
             <div className="text-center">

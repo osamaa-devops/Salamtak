@@ -7,19 +7,50 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Textarea } from "./ui/textarea";
 import { ArrowRight, User, Mail, Lock, MapPin, Clock } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
+import { api, AuthResult } from "../services/api";
+import { toast } from "sonner@2.0.3";
 
 interface DoctorLoginProps {
   onBack: () => void;
-  onLogin: () => void;
+  onLogin: (result: AuthResult) => void;
 }
 
 export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
   const { t, dir, language } = useApp();
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [specialty, setSpecialty] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    onLogin();
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+
+    try {
+      const result = isRegistering
+        ? await api.register({
+            role: "doctor",
+            name: String(formData.get("name") || ""),
+            email: String(formData.get("email") || ""),
+            specialty,
+            experience: Number(formData.get("experience") || 0),
+            address: String(formData.get("address") || ""),
+            workHours: String(formData.get("workHours") || ""),
+            password: String(formData.get("password") || ""),
+            consultationType: "both",
+          })
+        : await api.login({
+            role: "doctor",
+            email: String(formData.get("email") || ""),
+            password: String(formData.get("password") || ""),
+          });
+
+      onLogin(result);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === "ar" ? "فشل تسجيل الدخول" : "Login failed");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -53,7 +84,7 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                   <Label htmlFor="doctor-name">{t('register.name')}</Label>
                   <div className="relative">
                     <User className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Input id="doctor-name" placeholder={language === 'ar' ? 'مثال :احمد محمد' : 'EX:Dr. Ahmed Mohamed'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Input id="doctor-name" name="name" placeholder={language === 'ar' ? 'مثال :احمد محمد' : 'EX:Dr. Ahmed Mohamed'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} required />
                   </div>
                 </div>
                 
@@ -61,13 +92,13 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                   <Label htmlFor="doctor-email">{t('register.email')}</Label>
                   <div className="relative">
                     <Mail className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Input id="doctor-email" type="email" placeholder="doctor@example.com" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Input id="doctor-email" name="email" type="email" placeholder="doctor@example.com" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} required />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="specialty">{language === 'ar' ? 'التخصص' : 'Specialty'}</Label>
-                  <Select>
+                  <Select value={specialty} onValueChange={setSpecialty}>
                     <SelectTrigger>
                       <SelectValue placeholder={language === 'ar' ? 'اختر التخصص' : 'Select specialty'} />
                     </SelectTrigger>
@@ -84,14 +115,14 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                 
                 <div className="space-y-2">
                   <Label htmlFor="experience">{language === 'ar' ? 'سنوات الخبرة' : 'Years of Experience'}</Label>
-                  <Input id="experience" type="number" placeholder="5" />
+                  <Input id="experience" name="experience" type="number" placeholder="5" />
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="clinic-address">{language === 'ar' ? 'عنوان العيادة' : 'Clinic Address'}</Label>
                   <div className="relative">
                     <MapPin className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Textarea id="clinic-address" placeholder={language === 'ar' ? 'العنوان التفصيلي للعيادة' : 'Detailed clinic address'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Textarea id="clinic-address" name="address" placeholder={language === 'ar' ? 'العنوان التفصيلي للعيادة' : 'Detailed clinic address'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
                   </div>
                 </div>
                 
@@ -99,7 +130,7 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                   <Label htmlFor="work-hours">{language === 'ar' ? 'مواعيد العمل' : 'Working Hours'}</Label>
                   <div className="relative">
                     <Clock className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Input id="work-hours" placeholder={language === 'ar' ? 'من 9 ص إلى 5 م' : 'From 9 AM to 5 PM'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Input id="work-hours" name="workHours" placeholder={language === 'ar' ? 'من 9 ص إلى 5 م' : 'From 9 AM to 5 PM'} className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
                   </div>
                 </div>
                 
@@ -107,7 +138,7 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                   <Label htmlFor="doctor-password">{t('register.password')}</Label>
                   <div className="relative">
                     <Lock className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Input id="doctor-password" type="password" placeholder="********" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Input id="doctor-password" name="password" type="password" placeholder="********" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} required />
                   </div>
                 </div>
               </>
@@ -117,7 +148,7 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                   <Label htmlFor="email">{t('login.email')}</Label>
                   <div className="relative">
                     <Mail className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Input id="email" type="email" placeholder="doctor@example.com" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Input id="email" name="email" type="email" placeholder="doctor@example.com" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} required />
                   </div>
                 </div>
                 
@@ -125,14 +156,14 @@ export function DoctorLogin({ onBack, onLogin }: DoctorLoginProps) {
                   <Label htmlFor="password">{t('login.password')}</Label>
                   <div className="relative">
                     <Lock className={`absolute ${dir === 'rtl' ? 'right-3' : 'left-3'} top-3 h-4 w-4 text-muted-foreground`} />
-                    <Input id="password" type="password" placeholder="********" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} />
+                    <Input id="password" name="password" type="password" placeholder="********" className={dir === 'rtl' ? 'pr-10' : 'pl-10'} required />
                   </div>
                 </div>
               </>
             )}
             
-            <Button className="w-full" type="submit">
-              {isRegistering ? (language === 'ar' ? 'إنشاء الحساب' : 'Create Account') : t('login.submit')}
+            <Button className="w-full" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (language === 'ar' ? 'جاري المعالجة...' : 'Processing...') : isRegistering ? (language === 'ar' ? 'إنشاء الحساب' : 'Create Account') : t('login.submit')}
             </Button>
             
             <div className="text-center">

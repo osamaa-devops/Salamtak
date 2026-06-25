@@ -72,8 +72,7 @@ export function MobileOptimizer({ children }: MobileOptimizerProps) {
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to the install prompt: ${outcome}`);
+      await deferredPrompt.userChoice;
       setDeferredPrompt(null);
       setShowInstallPrompt(false);
     }

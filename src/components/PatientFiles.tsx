@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface PatientFilesProps {
   onNavigate?: (state: string) => void;
@@ -29,65 +31,19 @@ interface PatientFilesProps {
 export function PatientFiles({ onNavigate, onBack }: PatientFilesProps) {
   const { language, dir } = useApp();
   const [searchQuery, setSearchQuery] = useState("");
+  const { data: patientData, isLoading, error } = useAsyncData(() => api.patients(searchQuery), [searchQuery]);
 
-  // ملفات المرضى
-  const patientFiles = [
-    {
-      id: 1,
-      patientName: language === 'ar' ? "اسامه رضا رافت" : "Osama Reda Rafat",
-      age: 34,
-      lastVisit: "2024-01-10",
-      condition: language === 'ar' ? "ارتفاع ضغط الدم" : "Hypertension",
-      visits: 12,
-      phone: "01234567890",
-      status: "stable",
-      nextAppointment: "2024-01-25"
-    },
-    {
-      id: 2,
-      patientName: language === 'ar' ? "فاطمة أحمد محمد" : "Fatima Ahmed Mohamed",
-      age: 28,
-      lastVisit: "2024-01-12",
-      condition: language === 'ar' ? "السكري النوع الثاني" : "Type 2 Diabetes",
-      visits: 8,
-      phone: "01234567891",
-      status: "monitoring",
-      nextAppointment: "2024-01-22"
-    },
-    {
-      id: 3,
-      patientName: language === 'ar' ? "محمد علي حسن" : "Mohamed Ali Hassan",
-      age: 45,
-      lastVisit: "2024-01-13",
-      condition: language === 'ar' ? "أمراض القلب" : "Heart Disease",
-      visits: 15,
-      phone: "01234567892",
-      status: "critical",
-      nextAppointment: "2024-01-18"
-    },
-    {
-      id: 4,
-      patientName: language === 'ar' ? "سارة محمود عبدالله" : "Sara Mahmoud Abdullah",
-      age: 32,
-      lastVisit: "2024-01-14",
-      condition: language === 'ar' ? "فحص دوري" : "Periodic Check",
-      visits: 5,
-      phone: "01234567893",
-      status: "healthy",
-      nextAppointment: "2024-02-14"
-    },
-    {
-      id: 5,
-      patientName: language === 'ar' ? "عمر حسن إبراهيم" : "Omar Hassan Ibrahim",
-      age: 52,
-      lastVisit: "2024-01-14",
-      condition: language === 'ar' ? "آلام المفاصل" : "Joint Pain",
-      visits: 20,
-      phone: "01234567894",
-      status: "stable",
-      nextAppointment: "2024-01-28"
-    }
-  ];
+  const patientFiles = (patientData || []).map((patient) => ({
+    id: patient._id,
+    patientName: patient.user?.name || "",
+    age: patient.birthDate ? new Date().getFullYear() - new Date(patient.birthDate).getFullYear() : "-",
+    lastVisit: patient.lastVisit ? String(patient.lastVisit).slice(0, 10) : "-",
+    condition: patient.condition || "-",
+    visits: patient.visits || 0,
+    phone: patient.user?.phone || "",
+    status: patient.status || "healthy",
+    nextAppointment: patient.nextAppointment ? String(patient.nextAppointment).slice(0, 10) : "-",
+  }));
 
   const filteredPatients = patientFiles.filter(patient =>
     patient.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -241,11 +197,11 @@ export function PatientFiles({ onNavigate, onBack }: PatientFilesProps) {
                   className={dir === 'rtl' ? 'pr-10' : 'pl-10'}
                 />
               </div>
-              <Button variant="outline" className="sm:w-auto">
+              <Button variant="outline" onClick={() => setSearchQuery("")} className="sm:w-auto">
                 <Filter className={`h-4 w-4 ${dir === 'rtl' ? 'ml-2' : 'mr-2'}`} />
                 {language === 'ar' ? 'تصفية' : 'Filter'}
               </Button>
-              <Button className="sm:w-auto bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700">
+              <Button onClick={() => toast.success(language === 'ar' ? 'يمكن إضافة المرضى من شاشة التسجيل ثم سيظهرون هنا تلقائياً' : 'Patients can be added through registration and will appear here automatically')} className="sm:w-auto bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700">
                 <User className={`h-4 w-4 ${dir === 'rtl' ? 'ml-2' : 'mr-2'}`} />
                 {language === 'ar' ? 'إضافة مريض جديد' : 'Add New Patient'}
               </Button>
@@ -255,7 +211,11 @@ export function PatientFiles({ onNavigate, onBack }: PatientFilesProps) {
 
         {/* Patients List */}
         <div className="grid gap-4">
-          {filteredPatients.length > 0 ? (
+          {isLoading ? (
+            <Card><CardContent className="text-center py-12 text-muted-foreground">{language === 'ar' ? 'جاري تحميل ملفات المرضى...' : 'Loading patient files...'}</CardContent></Card>
+          ) : error ? (
+            <Card><CardContent className="text-center py-12 text-red-600">{error}</CardContent></Card>
+          ) : filteredPatients.length > 0 ? (
             filteredPatients.map((patient) => {
               const statusInfo = getStatusInfo(patient.status);
               return (
@@ -320,11 +280,11 @@ export function PatientFiles({ onNavigate, onBack }: PatientFilesProps) {
                           </Badge>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); window.location.href = `tel:${patient.phone}`; }}>
                             <Phone className={`h-4 w-4 ${dir === 'rtl' ? 'ml-2' : 'mr-2'}`} />
                             {language === 'ar' ? 'اتصال' : 'Call'}
                           </Button>
-                          <Button size="sm" className="bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700">
+                          <Button size="sm" onClick={(event) => { event.stopPropagation(); handleViewFile(patient); }} className="bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700">
                             <FileText className={`h-4 w-4 ${dir === 'rtl' ? 'ml-2' : 'mr-2'}`} />
                             {language === 'ar' ? 'عرض الملف' : 'View File'}
                           </Button>

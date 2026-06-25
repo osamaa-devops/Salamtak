@@ -21,9 +21,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface Review {
-  id: number;
+  id: string;
   patientName: string;
   rating: number;
   comment: string;
@@ -31,7 +33,7 @@ interface Review {
   verified: boolean;
   helpful: number;
   category: 'doctor' | 'clinic' | 'lab' | 'hospital';
-  targetId: number;
+  targetId?: string;
   targetName: string;
 }
 
@@ -65,63 +67,29 @@ export function RatingSystem() {
       value: 0
     }
   });
+  const { data: reviewData, setData: setReviewData } = useAsyncData(
+    () => api.reviews(selectedCategory, filterRating || undefined),
+    [selectedCategory, filterRating],
+  );
 
-  const reviews: Review[] = [
-    {
-      id: 1,
-      patientName: language === 'ar' ? 'أحمد محمد' : 'Ahmed Mohamed',
-      rating: 5,
-      comment: language === 'ar' ? 'طبيب ممتاز ومتفهم. شرح لي حالتي بوضوح وكان العلاج فعال جداً. أنصح به بشدة.' : 'Excellent and understanding doctor. Explained my condition clearly and the treatment was very effective. Highly recommend.',
-      date: "2024-01-10",
-      verified: true,
-      helpful: 12,
-      category: 'doctor',
-      targetId: 1,
-      targetName: t('default.doctor.name')
-    },
-    {
-      id: 2,
-      patientName: language === 'ar' ? 'فاطمة علي' : 'Fatima Ali',
-      rating: 4,
-      comment: language === 'ar' ? 'عيادة نظيفة وموظفين محترمين. وقت الانتظار كان قليل. الطبيب كان جيد أتمنى لو أعطى وقت أكثر للشرح.' : 'Clean clinic with respectful staff. Waiting time was short. The doctor was good but I wish he had given more time for explanation.',
-      date: "2024-01-08",
-      verified: true,
-      helpful: 8,
-      category: 'clinic',
-      targetId: 1,
-      targetName: "مستشفى النور"
-    },
-    {
-      id: 3,
-      patientName: language === 'ar' ? 'محمد حسن' : 'Mohamed Hassan',
-      rating: 5,
-      comment: language === 'ar' ? 'تحاليل دقيقة ونتائج سريعة. الأسعار معقولة والخدمة ممتازة.' : 'Accurate tests with quick results. Prices are reasonable and the service is excellent.',
-      date: "2024-01-05",
-      verified: true,
-      helpful: 15,
-      category: 'lab',
-      targetId: 1,
-      targetName: "معمل الفا للتحاليل"
-    }
-  ];
+  const reviews: Review[] = (reviewData?.items || []).map((review) => ({
+    id: review._id,
+    patientName: review.patientName,
+    rating: review.rating,
+    comment: review.comment,
+    date: String(review.createdAt).slice(0, 10),
+    verified: review.verified,
+    helpful: review.helpful,
+    category: review.category,
+    targetId: review.targetId,
+    targetName: review.targetName,
+  }));
 
-  const ratingStats: RatingStats = {
-    overall: 4.7,
-    totalReviews: 234,
-    distribution: {
-      5: 156,
-      4: 45,
-      3: 20,
-      2: 8,
-      1: 5
-    },
-    categories: {
-      quality: 4.8,
-      waiting: 4.2,
-      staff: 4.6,
-      cleanliness: 4.9,
-      value: 4.4
-    }
+  const ratingStats: RatingStats = reviewData?.stats || {
+    overall: 0,
+    totalReviews: 0,
+    distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+    categories: { quality: 0, waiting: 0, staff: 0, cleanliness: 0, value: 0 },
   };
 
   const renderStars = (rating: number, interactive = false, onRate?: (rating: number) => void) => {
@@ -148,7 +116,7 @@ export function RatingSystem() {
     return true;
   });
 
-  const submitReview = () => {
+  const submitReview = async () => {
     if (newReview.rating === 0) {
       toast.error(language === 'ar' ? 'يرجى اختيار تقييم' : 'Please select a rating');
       return;
@@ -159,20 +127,47 @@ export function RatingSystem() {
       return;
     }
 
-    toast.success(language === 'ar' ? 'تم إضافة تقييمك بنجاح. شكراً لك!' : 'Your review has been added successfully. Thank you!');
-    setShowAddReview(false);
-    setNewReview({
-      rating: 0,
-      comment: "",
-      targetId: 1,
-      categories: {
-        quality: 0,
-        waiting: 0,
-        staff: 0,
-        cleanliness: 0,
-        value: 0
-      }
-    });
+    try {
+      const created = await api.createReview({
+        rating: newReview.rating,
+        comment: newReview.comment,
+        category: selectedCategory,
+        targetName: selectedCategory === "doctor" ? t('default.doctor.name') : selectedCategory,
+        categories: newReview.categories,
+      });
+      setReviewData({
+        stats: ratingStats,
+        items: [created, ...(reviewData?.items || [])],
+      });
+      toast.success(language === 'ar' ? 'تم إضافة تقييمك بنجاح. شكراً لك!' : 'Your review has been added successfully. Thank you!');
+      setShowAddReview(false);
+      setNewReview({
+        rating: 0,
+        comment: "",
+        targetId: 1,
+        categories: {
+          quality: 0,
+          waiting: 0,
+          staff: 0,
+          cleanliness: 0,
+          value: 0
+        }
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === 'ar' ? 'تعذر إضافة التقييم' : 'Unable to add review');
+    }
+  };
+
+  const markHelpful = async (reviewId: string) => {
+    try {
+      const updated = await api.markReviewHelpful(reviewId);
+      setReviewData({
+        stats: ratingStats,
+        items: (reviewData?.items || []).map((review) => review._id === reviewId ? updated : review),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === 'ar' ? 'تعذر تحديث التقييم' : 'Unable to update review');
+    }
   };
 
   return (
@@ -429,11 +424,11 @@ export function RatingSystem() {
                           
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-reverse space-x-4">
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" onClick={() => markHelpful(review.id)}>
                                 <ThumbsUp className={`h-4 w-4 ${dir === 'rtl' ? 'ml-1' : 'mr-1'}`} />
                                 {language === 'ar' ? `مفيد (${review.helpful})` : `Helpful (${review.helpful})`}
                               </Button>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" onClick={() => toast.info(language === 'ar' ? 'يمكن للطبيب متابعة الرد من خلال الاستشارة أو موعد المتابعة' : 'Doctors can follow up through consultations or appointments')}>
                                 <MessageSquare className={`h-4 w-4 ${dir === 'rtl' ? 'ml-1' : 'mr-1'}`} />
                                 {language === 'ar' ? 'رد' : 'Reply'}
                               </Button>

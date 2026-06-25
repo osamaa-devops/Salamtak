@@ -42,11 +42,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface Patient {
-  id: number;
+  id: string;
+  patientUserId: string;
   name: string;
-  age: number;
+  age: number | string;
   symptoms: string;
   appointmentTime: string;
   medicalHistory: string[];
@@ -72,6 +75,7 @@ interface Notification {
 
 export function DoctorVideoConsultation() {
   const { language } = useApp();
+  const { data: appointmentData } = useAsyncData(() => api.appointments(), []);
   const [selectedPatient, setSelectedPatient] =
     useState<Patient | null>(null);
   const [isInCall, setIsInCall] = useState(false);
@@ -93,59 +97,19 @@ export function DoctorVideoConsultation() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const patientVideoRef = useRef<HTMLVideoElement>(null);
 
-  // المرضى المحجوزون للاستشارات المرئية فقط - يمكن الاتصال بهم
-  const scheduledPatients: Patient[] = [
-    {
-      id: 1,
-      name: language === 'ar' ? "اسامه رضا" : "Osama Reda",
-      age: 34,
-      symptoms: language === 'ar' ? "صداع مستمر مع دوخة خفيفة منذ يومين" : "Persistent headache with mild dizziness for two days",
-      appointmentTime: "14:30",
-      medicalHistory: language === 'ar' ? ["ارتفاع ضغط الدم", "مرض السكري"] : ["Hypertension", "Diabetes"],
-      bookingDate: language === 'ar' ? "اليوم" : "Today",
-      status: "waiting",
-    },
-    {
-      id: 2,
-      name: language === 'ar' ? "فاطمة أحمد" : "Fatima Ahmed",
-      age: 28,
-      symptoms: language === 'ar' ? "ألم في المعدة بعد الأكل مع غثيان" : "Stomach pain after eating with nausea",
-      appointmentTime: "15:00",
-      medicalHistory: language === 'ar' ? ["التهاب المعدة"] : ["Gastritis"],
-      bookingDate: language === 'ar' ? "اليوم" : "Today",
-      status: "waiting",
-    },
-    {
-      id: 3,
-      name: language === 'ar' ? "محمد علي" : "Mohamed Ali",
-      age: 45,
-      symptoms: language === 'ar' ? "ضيق في التنفس عند المجهود" : "Shortness of breath during exertion",
-      appointmentTime: "15:30",
-      medicalHistory: language === 'ar' ? ["أمراض القلب"] : ["Heart Disease"],
-      bookingDate: language === 'ar' ? "اليوم" : "Today",
-      status: "waiting",
-    },
-    {
-      id: 4,
-      name: language === 'ar' ? "مريم سعد" : "Mariam Saad",
-      age: 32,
-      symptoms: language === 'ar' ? "طفح جلدي مع حكة شديدة" : "Skin rash with severe itching",
-      appointmentTime: "16:00",
-      medicalHistory: language === 'ar' ? ["حساسية الطعام"] : ["Food Allergy"],
-      bookingDate: language === 'ar' ? "اليوم" : "Today",
-      status: "waiting",
-    },
-    {
-      id: 5,
-      name: language === 'ar' ? "علي حسن" : "Ali Hassan",
-      age: 39,
-      symptoms: language === 'ar' ? "ألم في الصدر عند الحركة" : "Chest pain during movement",
-      appointmentTime: "16:30",
-      medicalHistory: language === 'ar' ? ["لا يوجد"] : ["None"],
-      bookingDate: language === 'ar' ? "اليوم" : "Today",
-      status: "waiting",
-    },
-  ];
+  const scheduledPatients: Patient[] = (appointmentData || [])
+    .filter((appointment) => appointment.type === "video")
+    .map((appointment) => ({
+      id: appointment._id,
+      patientUserId: appointment.patient?._id,
+      name: appointment.patient?.name || "",
+      age: "-",
+      symptoms: appointment.symptoms || "",
+      appointmentTime: appointment.time,
+      medicalHistory: [],
+      bookingDate: appointment.date ? new Date(appointment.date).toLocaleDateString(language === "ar" ? "ar-EG" : "en-US") : "",
+      status: appointment.status === "completed" ? "completed" : appointment.status === "cancelled" ? "cancelled" : "waiting",
+    }));
 
   useEffect(() => {
     if (isInCall && videoRef.current) {
@@ -159,8 +123,6 @@ export function DoctorVideoConsultation() {
             }
           })
           .catch((error) => {
-            // Silently handle error in mock/demo environment
-            console.log('Camera not available (demo mode):', error.name);
             // Only show error if it's a permission issue, not device not found
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
               toast.error("يرجى السماح بالوصول للكاميرا والميكروفون");
@@ -168,35 +130,6 @@ export function DoctorVideoConsultation() {
           });
       }
     }
-
-    // Initialize notifications
-    const initialNotifications: Notification[] = [
-      {
-        id: 1,
-        type: "appointment",
-        title: language === 'ar' ? "موعد جديد" : "New Appointment",
-        message: language === 'ar' ? "لديك موعد مع اسامه رضا في الساعة 14:30" : "You have an appointment with Osama Reda at 14:30",
-        timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-        isRead: false,
-      },
-      {
-        id: 2,
-        type: "reminder",
-        title: language === 'ar' ? "تذكير" : "Reminder",
-        message: language === 'ar' ? "لا تنسى مراجعة التقارير الطبية للمرضى" : "Don't forget to review patients' medical reports",
-        timestamp: new Date(Date.now() - 15 * 60 * 1000), // 15 minutes ago
-        isRead: false,
-      },
-      {
-        id: 3,
-        type: "update",
-        title: language === 'ar' ? "تحديث النظام" : "System Update",
-        message: language === 'ar' ? "تم تحديث نظام الاستشارات المرئية بنجاح" : "Video consultation system updated successfully",
-        timestamp: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-        isRead: false,
-      },
-    ];
-    setNotifications(initialNotifications);
 
     return () => {
       // Cleanup: stop video stream when component unmounts
@@ -206,6 +139,22 @@ export function DoctorVideoConsultation() {
       }
     };
   }, [isInCall]);
+
+  useEffect(() => {
+    setNotifications(
+      scheduledPatients.map((patient, index) => ({
+        id: index + 1,
+        type: "appointment",
+        title: language === "ar" ? "موعد فيديو" : "Video Appointment",
+        message:
+          language === "ar"
+            ? `لديك موعد مع ${patient.name} في الساعة ${patient.appointmentTime}`
+            : `You have an appointment with ${patient.name} at ${patient.appointmentTime}`,
+        timestamp: new Date(),
+        isRead: false,
+      })),
+    );
+  }, [appointmentData, language]);
 
   const startConsultation = (patient: Patient) => {
     setSelectedPatient(patient);
@@ -223,11 +172,31 @@ export function DoctorVideoConsultation() {
     ]);
   };
 
-  const endConsultation = () => {
-    if (
-      selectedPatient &&
-      (diagnosis || treatment || consultationNotes)
-    ) {
+  const endConsultation = async () => {
+    if (selectedPatient) {
+      try {
+        if (diagnosis && treatment) {
+          await api.createPrescription({
+            patient: selectedPatient.patientUserId,
+            appointment: selectedPatient.id,
+            diagnosis,
+            medications: [
+              {
+                name: treatment,
+                dosage: language === "ar" ? "حسب تعليمات الطبيب" : "As directed",
+                frequency: "",
+                duration: "",
+                instructions: consultationNotes,
+              },
+            ],
+            notes: consultationNotes,
+          });
+        }
+        await api.updateAppointment(selectedPatient.id, { status: "completed" });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : language === "ar" ? "تعذر حفظ التقرير الطبي" : "Unable to save medical report");
+        return;
+      }
       toast.success(
         language === 'ar' ? `تم إنهاء الاستشارة مع ${selectedPatient.name} وحفظ التقرير الطبي` : `Consultation ended with ${selectedPatient.name} and medical report saved`,
       );
@@ -254,16 +223,6 @@ export function DoctorVideoConsultation() {
     setChatMessages((prev) => [...prev, message]);
     setNewMessage("");
 
-    // Mock patient response
-    setTimeout(() => {
-      const patientResponse: ChatMessage = {
-        id: chatMessages.length + 2,
-        sender: "patient",
-        message: language === 'ar' ? "شكراً لك دكتور على هذه النصائح المفيدة." : "Thank you doctor for these helpful tips.",
-        timestamp: new Date(),
-      };
-      setChatMessages((prev) => [...prev, patientResponse]);
-    }, 2000);
   };
 
   const toggleCamera = () => {

@@ -21,9 +21,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface MedicationSchedule {
-  id: number;
+  id: string;
   medicationName: string;
   dosage: string;
   times: string[];
@@ -33,7 +35,7 @@ interface MedicationSchedule {
 }
 
 interface Reminder {
-  id: number;
+  id: string;
   type: 'medication' | 'appointment';
   title: string;
   message: string;
@@ -49,45 +51,25 @@ interface MedicationReminderProps {
 export function MedicationReminder({ onNavigate, onBack }: MedicationReminderProps) {
   const { t, dir, language } = useApp();
   
-  const [schedules, setSchedules] = useState<MedicationSchedule[]>([
-    {
-      id: 1,
-      medicationName: language === 'ar' ? 'أسبرين 100 مجم' : 'Aspirin 100mg',
-      dosage: language === 'ar' ? 'قرص واحد' : '1 tablet',
-      times: ["08:00", "20:00"],
-      isActive: true,
-      nextDose: new Date("2024-01-15T20:00:00"),
-      takenToday: ["08:00"]
-    },
-    {
-      id: 2,
-      medicationName: language === 'ar' ? 'ليزينوبريل 10 مجم' : 'Lisinopril 10mg',
-      dosage: language === 'ar' ? 'قرص واحد' : '1 tablet',
-      times: ["08:00"],
-      isActive: true,
-      nextDose: new Date("2024-01-16T08:00:00"),
-      takenToday: []
-    }
-  ]);
-
-  const [reminders, setReminders] = useState<Reminder[]>([
-    {
-      id: 1,
-      type: 'medication',
-      title: language === 'ar' ? 'وقت تناول الدواء' : 'Medication Time',
-      message: language === 'ar' ? 'حان وقت تناول أسبرين 100 مجم' : 'Time to take Aspirin 100mg',
-      time: new Date(),
-      isRead: false
-    },
-    {
-      id: 2,
-      type: 'appointment',
-      title: language === 'ar' ? 'موعد طبي غداً' : 'Medical Appointment Tomorrow',
-      message: language === 'ar' ? `لديك موعد مع ${t('default.doctor.name')} غداً في 2:00 م` : `You have an appointment with ${t('default.doctor.name')} tomorrow at 2:00 PM`,
-      time: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      isRead: false
-    }
-  ]);
+  const { data: scheduleData, setData: setScheduleData, isLoading: schedulesLoading, error: schedulesError } = useAsyncData(() => api.medicationSchedules(), []);
+  const { data: reminderData, setData: setReminderData } = useAsyncData(() => api.reminders(), []);
+  const schedules: MedicationSchedule[] = (scheduleData || []).map((schedule) => ({
+    id: schedule._id,
+    medicationName: schedule.medicationName,
+    dosage: schedule.dosage,
+    times: schedule.times,
+    isActive: schedule.isActive,
+    nextDose: schedule.nextDose ? new Date(schedule.nextDose) : new Date(),
+    takenToday: schedule.takenToday || [],
+  }));
+  const reminders: Reminder[] = (reminderData || []).map((reminder) => ({
+    id: reminder._id,
+    type: reminder.type,
+    title: reminder.title,
+    message: reminder.message,
+    time: new Date(reminder.time),
+    isRead: reminder.isRead,
+  }));
 
   const [newMedication, setNewMedication] = useState({
     name: "",
@@ -122,17 +104,15 @@ export function MedicationReminder({ onNavigate, onBack }: MedicationReminderPro
     });
   };
 
-  const markAsTaken = (scheduleId: number, time: Date) => {
+  const markAsTaken = async (scheduleId: string, time: Date) => {
     const timeString = time.toTimeString().slice(0, 5);
-    setSchedules(prev => prev.map(schedule => 
-      schedule.id === scheduleId 
-        ? { 
-            ...schedule, 
-            takenToday: [...schedule.takenToday, timeString],
-            nextDose: getNextDoseTime(schedule)
-          }
-        : schedule
-    ));
+    const schedule = schedules.find((item) => item.id === scheduleId);
+    if (!schedule) return;
+    const updated = await api.updateMedicationSchedule(scheduleId, {
+      takenToday: [...schedule.takenToday, timeString],
+      nextDose: getNextDoseTime(schedule),
+    });
+    setScheduleData((scheduleData || []).map((item) => item._id === scheduleId ? updated : item));
     toast.success("تم تسجيل تناول الدواء");
   };
 
@@ -158,21 +138,21 @@ export function MedicationReminder({ onNavigate, onBack }: MedicationReminderPro
     return tomorrow;
   };
 
-  const toggleSchedule = (id: number) => {
-    setSchedules(prev => prev.map(schedule => 
-      schedule.id === id ? { ...schedule, isActive: !schedule.isActive } : schedule
-    ));
+  const toggleSchedule = async (id: string) => {
+    const schedule = schedules.find((item) => item.id === id);
+    if (!schedule) return;
+    const updated = await api.updateMedicationSchedule(id, { isActive: !schedule.isActive });
+    setScheduleData((scheduleData || []).map((item) => item._id === id ? updated : item));
   };
 
-  const addMedication = () => {
-    const newSchedule: MedicationSchedule = {
-      id: Math.max(...schedules.map(s => s.id)) + 1,
+  const addMedication = async () => {
+    const payload = {
       medicationName: newMedication.name,
       dosage: newMedication.dosage,
       times: newMedication.times,
       isActive: true,
       nextDose: getNextDoseTime({
-        id: 0,
+        id: "new",
         medicationName: newMedication.name,
         dosage: newMedication.dosage,
         times: newMedication.times,
@@ -183,21 +163,22 @@ export function MedicationReminder({ onNavigate, onBack }: MedicationReminderPro
       takenToday: []
     };
     
-    setSchedules(prev => [...prev, newSchedule]);
+    const created = await api.createMedicationSchedule(payload);
+    setScheduleData([...(scheduleData || []), created]);
     setNewMedication({ name: "", dosage: "", frequency: "1", times: ["08:00"] });
     setIsAddingMedication(false);
     toast.success("تم إضافة الدواء بنجاح");
   };
 
-  const deleteSchedule = (id: number) => {
-    setSchedules(prev => prev.filter(schedule => schedule.id !== id));
+  const deleteSchedule = async (id: string) => {
+    await api.deleteMedicationSchedule(id);
+    setScheduleData((scheduleData || []).filter((schedule) => schedule._id !== id));
     toast.success("تم حذف الدواء");
   };
 
-  const markReminderAsRead = (id: number) => {
-    setReminders(prev => prev.map(reminder => 
-      reminder.id === id ? { ...reminder, isRead: true } : reminder
-    ));
+  const markReminderAsRead = async (id: string) => {
+    const updated = await api.markReminderRead(id);
+    setReminderData((reminderData || []).map((reminder) => reminder._id === id ? updated : reminder));
   };
 
   const unreadCount = reminders.filter(r => !r.isRead).length;

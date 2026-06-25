@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface PatientProfileProps {
   onNavigate?: (state: string) => void;
@@ -31,6 +33,7 @@ interface PatientProfileProps {
 export function PatientProfile({ onNavigate, onBack }: PatientProfileProps) {
   const { t, dir, language } = useApp();
   const [isEditing, setIsEditing] = useState(false);
+  const { data: serverProfile, setData: setServerProfile } = useAsyncData(() => api.patientProfile(), []);
   const [profileData, setProfileData] = useState({
     name: t('default.patient.name'),
     phone: "01234567890",
@@ -45,31 +48,44 @@ export function PatientProfile({ onNavigate, onBack }: PatientProfileProps) {
     emergencyContactName: language === 'ar' ? ' رضا رافت' : 'Reda Raafat'
   });
 
-  const [medicalHistory] = useState([
-    {
-      condition: language === 'ar' ? 'ارتفاع ضغط الدم' : 'Hypertension',
-      diagnosedDate: "2022-03-15",
-      status: language === 'ar' ? 'مزمن' : 'Chronic',
-      medication: language === 'ar' ? 'ليزينوبريل 10 مجم' : 'Lisinopril 10mg'
-    },
-    {
-      condition: language === 'ar' ? 'مرض السكري النوع الثاني' : 'Type 2 Diabetes',
-      diagnosedDate: "2021-11-20",
-      status: language === 'ar' ? 'مزمن' : 'Chronic',
-      medication: language === 'ar' ? 'ميتفورمين 500 مجم' : 'Metformin 500mg'
+  const medicalHistory = serverProfile?.medicalHistory || [];
+  const allergies = serverProfile?.allergies || [];
+
+  useEffect(() => {
+    if (!serverProfile) return;
+    setProfileData({
+      name: serverProfile.user?.name || t('default.patient.name'),
+      phone: serverProfile.user?.phone || "01234567890",
+      email: serverProfile.user?.email || "osama.reda@example.com",
+      birthDate: serverProfile.birthDate ? String(serverProfile.birthDate).slice(0, 10) : "1990-01-15",
+      gender: serverProfile.gender || "male",
+      address: serverProfile.address || "",
+      bloodType: serverProfile.bloodType || "O+",
+      height: String(serverProfile.height || "175"),
+      weight: String(serverProfile.weight || "75"),
+      emergencyContact: serverProfile.emergencyContact || "01987654321",
+      emergencyContactName: serverProfile.emergencyContactName || "",
+    });
+  }, [serverProfile, language]);
+
+  const handleSave = async () => {
+    try {
+      const updated = await api.updatePatientProfile({
+        birthDate: profileData.birthDate,
+        gender: profileData.gender,
+        address: profileData.address,
+        bloodType: profileData.bloodType,
+        height: Number(profileData.height),
+        weight: Number(profileData.weight),
+        emergencyContact: profileData.emergencyContact,
+        emergencyContactName: profileData.emergencyContactName,
+      });
+      setServerProfile(updated);
+      setIsEditing(false);
+      toast.success(language === 'ar' ? 'تم تحديث البيانات بنجاح' : 'Profile updated successfully');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === 'ar' ? 'تعذر تحديث البيانات' : 'Unable to update profile');
     }
-  ]);
-
-  const [allergies] = useState([
-    language === 'ar' ? 'البنسلين' : 'Penicillin',
-    language === 'ar' ? 'الأسبرين' : 'Aspirin',
-    language === 'ar' ? 'المكسرات' : 'Nuts'
-  ]);
-
-  const handleSave = () => {
-    // Save profile data
-    setIsEditing(false);
-    toast.success(language === 'ar' ? 'تم تحديث البيانات بنجاح' : 'Profile updated successfully');
   };
 
   const handleCancel = () => {

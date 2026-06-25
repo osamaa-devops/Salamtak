@@ -27,9 +27,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { useApp } from "../contexts/AppContext";
+import { api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 interface Doctor {
-  id: number;
+  id: string;
   name: string;
   specialty: string;
   rating: number;
@@ -58,59 +60,22 @@ export function VideoConsultation() {
   const [showChat, setShowChat] = useState(false);
   const [symptoms, setSymptoms] = useState("");
   const [showBookingDialog, setShowBookingDialog] = useState(false);
+  const [consultationId, setConsultationId] = useState<string | null>(null);
+  const { data: doctorData, isLoading, error } = useAsyncData(() => api.videoDoctors(), []);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const doctorVideoRef = useRef<HTMLVideoElement>(null);
 
-  const doctors: Doctor[] = [
-    {
-      id: 1,
-      name: t('default.doctor.name'),
-      specialty: t('specialty.cardiology'),
-      rating: 4.9,
-      experience: 15,
-      price: 150,
-      available: true
-    },
-    {
-      id: 2,
-      name: t('default.doctor2.name'),
-      specialty: t('specialty.dermatology'),
-      rating: 4.8,
-      experience: 12,
-      price: 120,
-      available: false,
-      nextAvailable: "16:00"
-    },
-    {
-      id: 3,
-      name: t('default.doctor3.name'),
-      specialty: t('specialty.general'),
-      rating: 4.7,
-      experience: 10,
-      price: 100,
-      available: true
-    },
-    {
-      id: 4,
-      name: t('default.doctor.name'),
-      specialty: t('specialty.orthopedics'),
-      rating: 4.6,
-      experience: 18,
-      price: 180,
-      available: true
-    },
-    {
-      id: 5,
-      name: t('default.doctor2.name'),
-      specialty: t('specialty.pediatrics'),
-      rating: 4.8,
-      experience: 14,
-      price: 140,
-      available: false,
-      nextAvailable: "18:30"
-    }
-  ];
+  const doctors: Doctor[] = (doctorData || []).map((doctor) => ({
+    id: doctor.user?._id,
+    name: doctor.user?.name || "",
+    specialty: doctor.specialty,
+    rating: doctor.rating || 0,
+    experience: doctor.experience || 0,
+    price: doctor.fee || 0,
+    available: doctor.isAvailableForVideo,
+    nextAvailable: doctor.nextAvailable,
+  }));
 
   useEffect(() => {
     if (isInCall && videoRef.current) {
@@ -123,8 +88,6 @@ export function VideoConsultation() {
             }
           })
           .catch(error => {
-            // Silently handle error in mock/demo environment
-            console.log('Camera not available (demo mode):', error.name);
             // Only show error if it's a permission issue, not device not found
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
               toast.error(language === 'ar' ? 'يرجى السماح بالوصول للكاميرا والميكروفون' : 'Please allow access to camera and microphone');
@@ -142,16 +105,28 @@ export function VideoConsultation() {
     };
   }, [isInCall]);
 
-  const startConsultation = (doctor: Doctor) => {
+  const startConsultation = async (doctor: Doctor) => {
     if (!symptoms.trim()) {
       toast.error(language === 'ar' ? 'يرجى كتابة وصف للأعراض' : 'Please write a description of the symptoms');
       return;
     }
     
-    setSelectedDoctor(doctor);
-    setIsInCall(true);
-    setShowBookingDialog(false);
-    toast.success(language === 'ar' ? `تم بدء الاستشارة مع ${doctor.name}` : `Consultation started with ${doctor.name}`);
+    try {
+      const consultation = await api.startConsultation({
+        doctor: doctor.id,
+        symptoms,
+        price: doctor.price,
+        initialMessage: symptoms,
+      });
+      setConsultationId(consultation._id);
+      setSelectedDoctor(doctor);
+      setIsInCall(true);
+      setShowBookingDialog(false);
+      toast.success(language === 'ar' ? `تم بدء الاستشارة مع ${doctor.name}` : `Consultation started with ${doctor.name}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === 'ar' ? 'تعذر بدء الاستشارة' : 'Unable to start consultation');
+      return;
+    }
     
     // Add initial chat message
     setChatMessages([{
@@ -164,9 +139,13 @@ export function VideoConsultation() {
     }]);
   };
 
-  const endConsultation = () => {
+  const endConsultation = async () => {
+    if (consultationId) {
+      await api.endConsultation(consultationId).catch(() => undefined);
+    }
     setIsInCall(false);
     setSelectedDoctor(null);
+    setConsultationId(null);
     setChatMessages([]);
     setSymptoms("");
     toast.success(language === 'ar' ? 'تم إنهاء الاستشارة بنجاح. سيتم إرسال التقرير الطبي إليك قريباً' : 'Consultation ended successfully. The medical report will be sent to you soon');
@@ -184,19 +163,9 @@ export function VideoConsultation() {
     
     setChatMessages(prev => [...prev, message]);
     setNewMessage("");
-    
-    // Mock doctor response
-    setTimeout(() => {
-      const doctorResponse: ChatMessage = {
-        id: chatMessages.length + 2,
-        sender: 'doctor',
-        message: language === 'ar' 
-          ? 'شكراً لك على هذه المعلومات. بناءً على ما وصفته، أنصحك بما يلي...'
-          : 'Thank you for this information. Based on what you described, I recommend the following...',
-        timestamp: new Date()
-      };
-      setChatMessages(prev => [...prev, doctorResponse]);
-    }, 2000);
+    if (consultationId) {
+      api.addConsultationMessage(consultationId, newMessage).catch(() => undefined);
+    }
   };
 
   const toggleCamera = () => {
@@ -435,7 +404,10 @@ export function VideoConsultation() {
       <div>
         <h2 className="text-2xl font-bold mb-6">{language === 'ar' ? 'الأطباء المتاحون للاستشارة المرئية' : 'Available Doctors for Video Consultation'}</h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {doctors.map((doctor) => (
+              {isLoading && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'جاري تحميل الأطباء...' : 'Loading doctors...'}</p>}
+              {error && <p className="text-center text-red-600 py-6">{error}</p>}
+              {!isLoading && !error && doctors.length === 0 && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'لا يوجد أطباء متاحون الآن' : 'No doctors available now'}</p>}
+              {doctors.map((doctor) => (
             <Card key={doctor.id} className="relative hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-center space-x-reverse space-x-4">

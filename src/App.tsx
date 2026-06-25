@@ -18,6 +18,7 @@ import { PatientFiles } from "./components/PatientFiles";
 import { SubPageHeader } from "./components/SubPageHeader";
 import { MobileOptimizer } from "./components/MobileOptimizer";
 import { Toaster } from "./components/ui/sonner";
+import { ApiUser, clearAuthSession, getStoredUser, setAuthSession } from "./services/api";
 
 type AppState =
   | "home"
@@ -42,6 +43,7 @@ function AppContent() {
   const [currentState, setCurrentState] =
     useState<AppState>("home");
   const [userType, setUserType] = useState<UserType>(null);
+  const [currentUser, setCurrentUser] = useState<ApiUser | null>(() => getStoredUser());
 
   // Mobile First & PWA Setup
   useEffect(() => {
@@ -72,7 +74,9 @@ function AppContent() {
     if ('Notification' in window && Notification.permission === 'default' && isMobile) {
       setTimeout(() => {
         Notification.requestPermission().then(permission => {
-          console.log('Notification permission:', permission);
+          if (permission === "granted") {
+            document.body.classList.add("notifications-enabled");
+          }
         });
       }, 3000); // Delay to avoid immediate popup
     }
@@ -83,7 +87,6 @@ function AppContent() {
                         document.referrer.includes('android-app://');
     
     if (isStandalone) {
-      console.log('Running as PWA');
       document.body.classList.add('pwa-mode');
     }
 
@@ -115,17 +118,16 @@ function AppContent() {
     };
   }, []);
 
-  // Mock user data - في التطبيق الحقيقي ستأتي من قاعدة البيانات
-  const userData = {
-    doctor: {
-      name: "د. مختار نبيل",
-      specialty: "أمراض القلب",
-    },
-    patient: {
-      name: "اسامه رضا",
-      info: "مريض منذ 2023",
-    },
-  };
+  useEffect(() => {
+    if (currentUser?.role === "doctor") {
+      setUserType("doctor");
+      setCurrentState("doctor-dashboard");
+    }
+    if (currentUser?.role === "patient") {
+      setUserType("patient");
+      setCurrentState("patient-dashboard");
+    }
+  }, []);
 
   const handleUserTypeSelect = (type: "doctor" | "patient") => {
     setUserType(type);
@@ -134,15 +136,22 @@ function AppContent() {
     );
   };
 
-  const handleLogin = () => {
+  const handleLogin = (result?: { user: ApiUser; token: string }) => {
+    if (result) {
+      setAuthSession(result);
+      setCurrentUser(result.user);
+      setUserType(result.user.role === "doctor" ? "doctor" : "patient");
+    }
     setCurrentState(
-      userType === "doctor"
+      (result?.user.role || userType) === "doctor"
         ? "doctor-dashboard"
         : "patient-dashboard",
     );
   };
 
   const handleLogout = () => {
+    clearAuthSession();
+    setCurrentUser(null);
     setCurrentState("home");
     setUserType(null);
   };
@@ -188,8 +197,8 @@ function AppContent() {
   ) => {
     const userName =
       userType === "doctor"
-        ? userData.doctor.name
-        : userData.patient.name;
+        ? currentUser?.name || "د. مختار نبيل"
+        : currentUser?.name || "اسامه رضا";
 
     return (
       <>
@@ -234,6 +243,7 @@ function AppContent() {
           <DoctorDashboard
             onLogout={handleLogout}
             onNavigate={handleNavigate}
+            currentUser={currentUser}
           />
         );
 
@@ -242,6 +252,7 @@ function AppContent() {
           <PatientDashboard
             onLogout={handleLogout}
             onNavigate={handleNavigate}
+            currentUser={currentUser}
           />
         );
 

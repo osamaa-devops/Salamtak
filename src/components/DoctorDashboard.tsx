@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { 
   Calendar, 
@@ -28,112 +28,58 @@ import {
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { useApp } from "../contexts/AppContext";
+import { ApiUser, api } from "../services/api";
+import { useAsyncData } from "../hooks/useAsyncData";
+import { toast } from "sonner@2.0.3";
 
 interface DoctorDashboardProps {
   onLogout: () => void;
   onNavigate?: (state: string) => void;
+  currentUser?: ApiUser | null;
 }
 
-export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) {
+export function DoctorDashboard({ onLogout, onNavigate, currentUser }: DoctorDashboardProps) {
   const { t, dir, language, theme, toggleLanguage, toggleTheme } = useApp();
   const [selectedDate] = useState(new Date());
+  const { data: appointmentData, setData: setAppointmentData, isLoading: appointmentsLoading, error: appointmentsError } = useAsyncData(() => api.appointments(), []);
+  const { data: patientData, isLoading: patientsLoading, error: patientsError } = useAsyncData(() => api.patients(), []);
 
-  // Mock data for appointments
-  const todayAppointments = [
-    {
-      id: 1,
-      patientName: t('default.patient.name'),
-      time: "09:00",
-      type: t('doctor.appointment.new'),
-      phone: "01234567890",
-      status: "confirmed"
-    },
-    {
-      id: 2,
-      patientName: language === 'ar' ? "فاطمة أحمد" : "Fatima Ahmed",
-      time: "10:30",
-      type: t('doctor.appointment.followup'),
-      phone: "01234567891",
-      status: "waiting"
-    },
-    {
-      id: 3,
-      patientName: language === 'ar' ? "محمد علي" : "Mohamed Ali",
-      time: "11:15",
-      type: t('doctor.appointment.video'),
-      phone: "01234567892",
-      status: "confirmed"
-    }
-  ];
+  const appointments = (appointmentData || []).map((appointment) => ({
+    id: appointment._id,
+    patientName: appointment.patient?.name || "",
+    date: appointment.date,
+    time: appointment.time,
+    type: appointment.type === "followup" ? t('doctor.appointment.followup') : appointment.type === "video" ? t('doctor.appointment.video') : t('doctor.appointment.new'),
+    phone: appointment.patient?.phone || "",
+    status: appointment.status,
+  }));
 
-  const upcomingAppointments = [
-    {
-      id: 4,
-      patientName: language === 'ar' ? "سارة محمود" : "Sara Mahmoud",
-      date: "2024-01-15",
-      time: "14:00",
-      type: t('doctor.appointment.new')
-    },
-    {
-      id: 5,
-      patientName: language === 'ar' ? "عمر حسن" : "Omar Hassan",
-      date: "2024-01-16",
-      time: "10:00",
-      type: t('doctor.appointment.followup')
-    }
-  ];
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayAppointments = appointments.filter((appointment) => String(appointment.date).slice(0, 10) === todayKey);
+  const upcomingAppointments = appointments.filter((appointment) => String(appointment.date).slice(0, 10) !== todayKey);
 
   // عدد المرضى المحجوزين للاستشارة المرئية
   const videoConsultationPatients = 5;
 
-  // ملفات المرضى
-  const patientFiles = [
-    {
-      id: 1,
-      patientName: t('default.patient.name'),
-      age: 34,
-      lastVisit: "2024-01-10",
-      condition: t('condition.hypertension'),
-      visits: 12,
-      phone: "01234567890"
-    },
-    {
-      id: 2,
-      patientName: language === 'ar' ? "فاطمة أحمد محمد" : "Fatima Ahmed Mohamed",
-      age: 28,
-      lastVisit: "2024-01-12",
-      condition: t('condition.diabetes'),
-      visits: 8,
-      phone: "01234567891"
-    },
-    {
-      id: 3,
-      patientName: language === 'ar' ? "محمد علي حسن" : "Mohamed Ali Hassan",
-      age: 45,
-      lastVisit: "2024-01-13",
-      condition: t('condition.heartDisease'),
-      visits: 15,
-      phone: "01234567892"
-    },
-    {
-      id: 4,
-      patientName: language === 'ar' ? "سارة محمود عبدالله" : "Sara Mahmoud Abdullah",
-      age: 32,
-      lastVisit: "2024-01-14",
-      condition: language === 'ar' ? "فحص دوري" : "Periodic Check",
-      visits: 5,
-      phone: "01234567893"
-    },
-    {
-      id: 5,
-      patientName: language === 'ar' ? "عمر حسن إبراهيم" : "Omar Hassan Ibrahim",
-      age: 52,
-      lastVisit: "2024-01-14",
-      condition: t('condition.arthritis'),
-      visits: 20,
-      phone: "01234567894"
+  const patientFiles = (patientData || []).map((patient) => ({
+    id: patient._id,
+    patientName: patient.user?.name || "",
+    age: patient.birthDate ? new Date().getFullYear() - new Date(patient.birthDate).getFullYear() : "-",
+    lastVisit: patient.lastVisit ? String(patient.lastVisit).slice(0, 10) : "-",
+    condition: patient.condition || "-",
+    visits: patient.visits || 0,
+    phone: patient.user?.phone || "",
+  }));
+
+  const updateAppointmentStatus = async (id: string, status: string) => {
+    try {
+      const updated = await api.updateAppointment(id, { status });
+      setAppointmentData((appointmentData || []).map((appointment) => appointment._id === id ? updated : appointment));
+      toast.success(language === "ar" ? "تم تحديث الموعد" : "Appointment updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : language === "ar" ? "تعذر تحديث الموعد" : "Unable to update appointment");
     }
-  ];
+  };
 
   const quickActions = [
     {
@@ -214,15 +160,14 @@ export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) 
             <div className="flex items-center space-x-reverse space-x-4">
               <div className="relative">
                 <Avatar className="w-12 h-12 ring-2 ring-blue-200 ring-offset-2">
-                  <AvatarImage src="/placeholder.svg" />
                   <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
-                    {t('default.doctor.name').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    {(currentUser?.name || t('default.doctor.name')).split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full" />
               </div>
               <div className={dir === 'rtl' ? 'mr-2' : 'ml-2'}>
-                <h1 className="font-bold">{t('default.doctor.name')}</h1>
+                <h1 className="font-bold">{currentUser?.name || t('default.doctor.name')}</h1>
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
                   <Stethoscope className="h-3 w-3" />
                   {t('specialty.cardiology')}
@@ -254,11 +199,11 @@ export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) 
                 )}
               </Button>
               
-              <Button variant="ghost" size="sm" className="relative hover:bg-blue-50 dark:hover:bg-blue-900">
+              <Button variant="ghost" size="sm" onClick={() => onNavigate?.('doctor-video-consultation')} className="relative hover:bg-blue-50 dark:hover:bg-blue-900">
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
               </Button>
-              <Button variant="ghost" size="sm" className="hover:bg-blue-50 dark:hover:bg-blue-900">
+              <Button variant="ghost" size="sm" onClick={() => onNavigate?.('patient-files')} className="hover:bg-blue-50 dark:hover:bg-blue-900">
                 <Settings className="h-5 w-5" />
               </Button>
               <Button variant="ghost" size="sm" onClick={onLogout} className="hover:bg-red-50 dark:hover:bg-red-900 hover:text-red-600">
@@ -408,6 +353,9 @@ export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) 
             </div>
             
             <div className="grid gap-3 sm:gap-4">
+              {appointmentsLoading && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'جاري تحميل المواعيد...' : 'Loading appointments...'}</p>}
+              {appointmentsError && <p className="text-center text-red-600 py-6">{appointmentsError}</p>}
+              {!appointmentsLoading && !appointmentsError && todayAppointments.length === 0 && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'لا توجد مواعيد اليوم' : 'No appointments today'}</p>}
               {todayAppointments.map((appointment, idx) => (
                 <Card key={appointment.id} className="glass-card border-0 shadow-premium hover:shadow-premium-lg transition-all group overflow-hidden animate-fadeIn" style={{ animationDelay: `${idx * 0.1}s` }}>
                   <CardContent className="p-3 sm:p-4 lg:p-6">
@@ -438,11 +386,11 @@ export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) 
                       </div>
                       
                       <div className="flex items-center space-x-reverse space-x-2 gap-2">
-                        <Button variant="outline" size="sm" className="flex-1 sm:flex-none hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 h-8 sm:h-9 text-xs">
+                        <Button variant="outline" size="sm" onClick={() => window.location.href = `tel:${appointment.phone}`} className="flex-1 sm:flex-none hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300 h-8 sm:h-9 text-xs">
                           <Phone className={`h-3 w-3 ${dir === 'rtl' ? 'sm:ml-1.5' : 'sm:mr-1.5'}`} />
                           <span className="hidden sm:inline">{language === 'ar' ? 'اتصال' : 'Call'}</span>
                         </Button>
-                        <Button size="sm" className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-md h-8 sm:h-9 text-xs">
+                        <Button size="sm" onClick={() => onNavigate?.('patient-files')} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-md h-8 sm:h-9 text-xs">
                           <FolderOpen className={`h-3 w-3 ${dir === 'rtl' ? 'sm:ml-1.5' : 'sm:mr-1.5'}`} />
                           <span>{language === 'ar' ? 'عرض الملف' : 'View File'}</span>
                         </Button>
@@ -487,8 +435,8 @@ export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) 
                       </div>
                       
                       <div className="flex items-center space-x-reverse space-x-2 gap-2">
-                        <Button variant="outline" size="sm" className="flex-1 text-xs h-8">{language === 'ar' ? 'تعديل' : 'Edit'}</Button>
-                        <Button variant="outline" size="sm" className="flex-1 text-red-600 hover:bg-red-50 text-xs h-8">{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
+                        <Button variant="outline" size="sm" onClick={() => updateAppointmentStatus(appointment.id, "confirmed")} className="flex-1 text-xs h-8">{language === 'ar' ? 'تأكيد' : 'Confirm'}</Button>
+                        <Button variant="outline" size="sm" onClick={() => updateAppointmentStatus(appointment.id, "cancelled")} className="flex-1 text-red-600 hover:bg-red-50 text-xs h-8">{language === 'ar' ? 'إلغاء' : 'Cancel'}</Button>
                       </div>
                     </div>
                   </CardContent>
@@ -500,13 +448,16 @@ export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) 
           <TabsContent value="patients" className="space-y-3 sm:space-y-4">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-3">
               <h2 className="text-sm sm:text-base lg:text-lg font-semibold">{language === 'ar' ? `ملفات المرضى (${patientFiles.length} مريض)` : `Patient Files (${patientFiles.length} Patient)`}</h2>
-              <Button className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-xs sm:text-sm h-9 sm:h-10">
+              <Button onClick={() => onNavigate?.('patient-files')} className="bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-xs sm:text-sm h-9 sm:h-10">
                 <User className="h-3 w-3 sm:h-4 sm:w-4 ml-1.5 sm:ml-2" />
                 {language === 'ar' ? 'إضافة مريض جديد' : 'Add New Patient'}
               </Button>
             </div>
             
             <div className="grid gap-3 sm:gap-4">
+              {patientsLoading && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'جاري تحميل المرضى...' : 'Loading patients...'}</p>}
+              {patientsError && <p className="text-center text-red-600 py-6">{patientsError}</p>}
+              {!patientsLoading && !patientsError && patientFiles.length === 0 && <p className="text-center text-muted-foreground py-6">{language === 'ar' ? 'لا توجد ملفات مرضى' : 'No patient files'}</p>}
               {patientFiles.map((patient) => (
                 <Card key={patient.id} className="glass-card border-0 shadow-premium hover:shadow-premium-lg transition-all">
                   <CardContent className="p-3 sm:p-4 lg:p-6">
@@ -541,11 +492,11 @@ export function DoctorDashboard({ onLogout, onNavigate }: DoctorDashboardProps) 
                       </div>
                       
                       <div className="flex items-center space-x-reverse space-x-2 gap-2">
-                        <Button variant="outline" size="sm" className="flex-1 sm:flex-none text-xs h-8">
+                        <Button variant="outline" size="sm" onClick={() => window.location.href = `tel:${patient.phone}`} className="flex-1 sm:flex-none text-xs h-8">
                           <Phone className="h-3 w-3 sm:ml-1.5" />
                           <span className="hidden sm:inline">{language === 'ar' ? 'اتصال' : 'Call'}</span>
                         </Button>
-                        <Button size="sm" className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xs h-8">
+                        <Button size="sm" onClick={() => onNavigate?.('patient-files')} className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-xs h-8">
                           <FolderOpen className="h-3 w-3 sm:ml-1.5" />
                           <span>{language === 'ar' ? 'عرض الملف' : 'View File'}</span>
                         </Button>
